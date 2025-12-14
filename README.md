@@ -21,8 +21,38 @@ docker compose up --build
 
 Environment variables used by containers:
 
+- `APP_ENV` (set to `production` in docker-compose)
 - `MONGODB_URI` (defaults to `mongodb://localhost:27017/birthday_reminder` for local runs)
 - `PORT` (API only; defaults to `3000`)
+
+## Environment management (local/dev/staging/production)
+
+The app supports loading environment files based on `APP_ENV`:
+
+- If `APP_ENV=local` it will load `.env.local` (if present)
+- If `APP_ENV=dev` it will load `.env.dev` (if present)
+- If `APP_ENV=staging` it will load `.env.staging` (if present)
+- If `APP_ENV=production` it will load `.env.production` (if present)
+
+It will also load `.env` as a fallback if it exists.
+
+All real `.env*` files are gitignored. Only `*.example` templates are committed.
+
+Recommended workflow:
+
+```bash
+cp .env.local.example .env.local
+cp .env.dev.example .env.dev
+cp .env.staging.example .env.staging
+cp .env.production.example .env.production
+```
+
+Then export `APP_ENV` (or set it in the env file) before running:
+
+```bash
+APP_ENV=local bun run start:dev
+APP_ENV=local bun run start:worker:dev
+```
 
 ## Running locally (without Docker)
 
