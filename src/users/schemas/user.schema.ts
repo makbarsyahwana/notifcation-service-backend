@@ -20,6 +20,18 @@ export class User {
   @Prop({ required: true })
   timezone: string;
 
+  @Prop({ default: false, select: false })
+  emailVerified: boolean;
+
+  @Prop({ select: false })
+  otpHash?: string;
+
+  @Prop({ select: false })
+  otpSalt?: string;
+
+  @Prop({ type: Date, select: false })
+  otpExpiresAt?: Date;
+
   @Prop({ select: false })
   lastBirthdayMessageDate?: string;
 }

@@ -32,7 +32,7 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
 
   async handleTick(nowUtc: DateTime = DateTime.utc()): Promise<void> {
     const users = await this.userModel
-      .find({}, { name: 1, email: 1, timezone: 1 })
+      .find({ emailVerified: true }, { name: 1, email: 1, timezone: 1 })
       .select('+birthdayMd +lastBirthdayMessageDate')
       .lean()
       .exec();
