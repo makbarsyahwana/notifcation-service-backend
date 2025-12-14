@@ -176,7 +176,11 @@ export class AuthService {
     await this.ensureCaptchaIfRequired(requireCaptcha, hcaptchaToken, ip);
 
     const user = await this.userModel.findOne({ email: email.toLowerCase() }).exec();
-    if (!user) throw new BadRequestException('User not found');
+    if (!user) {
+      const captchaRequired =
+        count >= this.captchaAfterOtpRequests() || ipCount >= this.captchaAfterOtpRequests();
+      return { sent: true, captchaRequired };
+    }
 
     const otp = this.generateOtp();
     const otpSalt = randomBytes(16).toString('hex');
@@ -219,7 +223,12 @@ export class AuthService {
       .exec();
 
     if (!user || !user.otpHash || !user.otpSalt || !user.otpExpiresAt) {
-      throw new BadRequestException('OTP not requested');
+      const newCount = this.attemptTracker.recordVerifyFail(attemptKey, nowMs, windowMs);
+      const newIpCount = this.attemptTracker.recordVerifyFail(ipKey, nowMs, windowMs);
+      const captchaRequired =
+        newCount >= this.captchaAfterOtpFails() ||
+        newIpCount >= this.captchaAfterOtpFails();
+      throw new BadRequestException({ message: 'Invalid OTP', captchaRequired });
     }
 
     if (user.otpExpiresAt.getTime() < Date.now()) {
