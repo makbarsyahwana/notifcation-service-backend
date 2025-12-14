@@ -148,6 +148,19 @@ export class AuthService {
   }
 
   async signup(dto: SignupDto, ip?: string) {
+    const attemptKey = this.makeAttemptKey(dto.email, ip);
+    const ipKey = this.makeIpOnlyAttemptKey(ip);
+    const nowMs = Date.now();
+    const windowMs = this.captchaWindowMs();
+
+    const currentCount = this.attemptTracker.countRequestOtp(attemptKey, nowMs, windowMs);
+    const currentIpCount = this.attemptTracker.countRequestOtp(ipKey, nowMs, windowMs);
+
+    const shouldRequireCaptcha =
+      currentCount >= this.captchaAfterOtpRequests() ||
+      currentIpCount >= this.captchaAfterOtpRequests();
+    await this.ensureCaptchaIfRequired(shouldRequireCaptcha, dto.hcaptchaToken, ip);
+
     try {
       const created = await this.usersService.create({
         name: dto.name,
