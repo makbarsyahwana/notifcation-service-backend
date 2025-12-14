@@ -33,6 +33,9 @@ export class User {
   otpExpiresAt?: Date;
 
   @Prop({ select: false })
+  refreshTokenHash?: string;
+
+  @Prop({ select: false })
   lastBirthdayMessageDate?: string;
 }
 
