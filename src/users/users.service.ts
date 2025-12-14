@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { DateTime } from 'luxon';
 import { Model } from 'mongoose';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -16,9 +17,19 @@ export class UsersService {
     private readonly userModel: Model<UserDocument>,
   ) {}
 
+  private toBirthdayMd(birthdayIsoDate: string): string {
+    const dt = DateTime.fromISO(birthdayIsoDate, { zone: 'utc' });
+    const mm = String(dt.month).padStart(2, '0');
+    const dd = String(dt.day).padStart(2, '0');
+    return `${mm}-${dd}`;
+  }
+
   async create(dto: CreateUserDto): Promise<User> {
     try {
-      return await this.userModel.create(dto);
+      return await this.userModel.create({
+        ...dto,
+        birthdayMd: this.toBirthdayMd(dto.birthday),
+      });
     } catch (err: any) {
       if (err?.code === 11000) {
         throw new ConflictException('Email already exists');
@@ -34,9 +45,20 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<User> {
+    const setDoc: Record<string, unknown> = { ...dto };
+    const unsetDoc: Record<string, unknown> = {};
+    if (dto.birthday) {
+      setDoc.birthdayMd = this.toBirthdayMd(dto.birthday);
+      unsetDoc.lastBirthdayMessageDate = 1;
+    }
+
+    const updateDoc = Object.keys(unsetDoc).length
+      ? { $set: setDoc, $unset: unsetDoc }
+      : setDoc;
+
     try {
       const user = await this.userModel
-        .findByIdAndUpdate(id, dto, {
+        .findByIdAndUpdate(id, updateDoc, {
           new: true,
           runValidators: true,
         })

@@ -14,10 +14,26 @@ export class User {
   @Prop({ required: true })
   birthday: string;
 
+  @Prop({ required: true, select: false })
+  birthdayMd: string;
+
   @Prop({ required: true })
   timezone: string;
+
+  @Prop({ select: false })
+  lastBirthdayMessageDate?: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
 UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ birthdayMd: 1 });
+
+UserSchema.set('toJSON', {
+  transform: (_doc, ret) => {
+    const r = ret as any;
+    delete r.birthdayMd;
+    delete r.lastBirthdayMessageDate;
+    return r;
+  },
+});
