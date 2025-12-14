@@ -47,12 +47,14 @@ cp .env.staging.example .env.staging
 cp .env.production.example .env.production
 ```
 
-Then export `APP_ENV` (or set it in the env file) before running:
+Then export `APP_ENV` before running:
 
 ```bash
 APP_ENV=local bun run start:dev
 APP_ENV=local bun run start:worker:dev
 ```
+
+For staging/production, set `MONGODB_URI` to a credentialed MongoDB connection string.
 
 ## Running locally (without Docker)
 
