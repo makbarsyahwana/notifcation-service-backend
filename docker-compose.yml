@@ -1,0 +1,36 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: birthday-reminder-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  api:
+    build:
+      context: .
+    container_name: birthday-reminder-api
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongo:27017/birthday_reminder
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongo
+
+  worker:
+    build:
+      context: .
+    container_name: birthday-reminder-worker
+    restart: unless-stopped
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/birthday_reminder
+    command: ["bun", "dist/worker.js"]
+    depends_on:
+      - mongo
+
+volumes:
+  mongo_data:
