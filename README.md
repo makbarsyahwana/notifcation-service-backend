@@ -139,6 +139,16 @@ De-duplication:
 
 - The worker records `lastBirthdayMessageDate` (local date `YYYY-MM-DD`) so it won't send twice in the same day.
 
+Email sending (optional):
+
+- If `SMTP_ENABLED=true` and SMTP config is provided, the worker will send an email via SMTP (Nodemailer).
+- If SMTP is not configured, it falls back to console logging.
+
+Free options for testing SMTP:
+
+- Mailtrap (captures emails in a sandbox inbox)
+- Ethereal Email (test SMTP account; not real delivery)
+
 ## Tests
 
 ```bash
