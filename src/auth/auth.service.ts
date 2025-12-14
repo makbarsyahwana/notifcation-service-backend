@@ -232,7 +232,12 @@ export class AuthService {
     }
 
     if (user.otpExpiresAt.getTime() < Date.now()) {
-      throw new BadRequestException('OTP expired');
+      const newCount = this.attemptTracker.recordVerifyFail(attemptKey, nowMs, windowMs);
+      const newIpCount = this.attemptTracker.recordVerifyFail(ipKey, nowMs, windowMs);
+      const captchaRequired =
+        newCount >= this.captchaAfterOtpFails() ||
+        newIpCount >= this.captchaAfterOtpFails();
+      throw new BadRequestException({ message: 'Invalid OTP', captchaRequired });
     }
 
     const computed = this.hashOtp(otp, user.otpSalt);
