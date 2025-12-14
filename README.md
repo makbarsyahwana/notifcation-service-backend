@@ -54,6 +54,58 @@ APP_ENV=local bun run start:dev
 APP_ENV=local bun run start:worker:dev
 ```
 
+## Auth (OTP + JWT)
+
+This service uses passwordless **OTP via email** to log in.
+
+Endpoints:
+
+- `POST /auth/signup` (creates user and triggers OTP email)
+- `POST /auth/request-otp` (request a login OTP)
+- `POST /auth/verify-otp` (verify OTP and receive tokens)
+- `POST /auth/refresh` (rotate refresh token and receive new tokens)
+
+Example signup:
+
+```bash
+curl -X POST http://localhost:3000/auth/signup \
+  -H 'content-type: application/json' \
+  -d '{"name":"Jane Doe","email":"jane@example.com","birthday":"1990-12-14","timezone":"Asia/Jakarta"}'
+```
+
+Example request OTP:
+
+```bash
+curl -X POST http://localhost:3000/auth/request-otp \
+  -H 'content-type: application/json' \
+  -d '{"email":"jane@example.com"}'
+```
+
+Example verify OTP:
+
+```bash
+curl -X POST http://localhost:3000/auth/verify-otp \
+  -H 'content-type: application/json' \
+  -d '{"email":"jane@example.com","otp":"123456"}'
+```
+
+Response:
+
+```json
+{
+  "accessToken": "...",
+  "refreshToken": "..."
+}
+```
+
+Example refresh:
+
+```bash
+curl -X POST http://localhost:3000/auth/refresh \
+  -H 'content-type: application/json' \
+  -d '{"refreshToken":"<refreshToken>"}'
+```
+
 For staging/production, set `MONGODB_URI` to a credentialed MongoDB connection string.
 
 ## Running locally (without Docker)
@@ -71,6 +123,9 @@ bun run start:worker:dev
 ## API
 
 ### Create user
+
+Note: `POST /users` is a direct user creation endpoint.
+In typical usage you should prefer `POST /auth/signup` (OTP login + verification).
 
 `POST /users`
 
@@ -103,8 +158,11 @@ Validation:
 
 `GET /users/:id`
 
+This endpoint is protected by JWT and only allows a user to access their own record.
+
 ```bash
-curl http://localhost:3000/users/<mongoObjectId>
+curl http://localhost:3000/users/<mongoObjectId> \
+  -H 'authorization: Bearer <accessToken>'
 ```
 
 ### Update user
@@ -113,6 +171,7 @@ curl http://localhost:3000/users/<mongoObjectId>
 
 ```bash
 curl -X PATCH http://localhost:3000/users/<mongoObjectId> \
+  -H 'authorization: Bearer <accessToken>' \
   -H 'content-type: application/json' \
   -d '{"timezone":"America/New_York"}'
 ```
@@ -123,6 +182,7 @@ curl -X PATCH http://localhost:3000/users/<mongoObjectId> \
 
 ```bash
 curl -X DELETE http://localhost:3000/users/<mongoObjectId>
+  -H 'authorization: Bearer <accessToken>'
 ```
 
 ## Worker behavior
@@ -138,6 +198,10 @@ Happy Birthday, <name>! (<email>)
 De-duplication:
 
 - The worker records `lastBirthdayMessageDate` (local date `YYYY-MM-DD`) so it won't send twice in the same day.
+
+Email verification:
+
+- Birthday messages are only sent to users with `emailVerified=true`.
 
 Email sending (optional):
 
@@ -157,6 +221,6 @@ bun run test
 
 ## Notes / assumptions / limitations
 
-- Messages are **simulated via console log** (no email provider configured).
+- Email sending is **optional** and controlled by SMTP env configuration.
 - Birthdays are stored as `YYYY-MM-DD` and matched by month/day.
 - For `02-29` birthdays, the message will only be sent in leap years.
