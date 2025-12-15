@@ -25,6 +25,43 @@ Environment variables used by containers:
 - `MONGODB_URI` (defaults to `mongodb://localhost:27017/birthday_reminder` for local runs)
 - `PORT` (API only; defaults to `3000`)
 
+Required for API auth:
+
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
+
+### Using your own env with Docker Compose
+
+The Docker image does not bundle any `.env*` files (they are gitignored and also excluded via `.dockerignore`).
+If you want to use your own env values (JWT/SMTP/hCaptcha/etc.), pass them at runtime via Docker Compose.
+
+Recommended (no secrets committed): create a local `docker-compose.override.yml` and an env file.
+
+1) Create an env file (gitignored), e.g. `.env.docker`, and put your values there:
+
+```env
+JWT_ACCESS_SECRET=replace_me
+JWT_REFRESH_SECRET=replace_me
+```
+
+2) Create `docker-compose.override.yml`:
+
+```yml
+services:
+  api:
+    env_file:
+      - .env.docker
+  worker:
+    env_file:
+      - .env.docker
+```
+
+3) Run:
+
+```bash
+docker compose up --build
+```
+
 ## Environment management (local/dev/staging/production)
 
 The app supports loading environment files based on `APP_ENV`:
