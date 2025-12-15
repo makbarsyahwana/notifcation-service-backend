@@ -32,12 +32,12 @@ Required for API auth:
 
 ### Using your own env with Docker Compose
 
-The Docker image does not bundle any `.env*` files (they are gitignored and also excluded via `.dockerignore`).
+The Docker image does not bundle any `.env*`
 If you want to use your own env values (JWT/SMTP/hCaptcha/etc.), pass them at runtime via Docker Compose.
 
-Recommended (no secrets committed): create a local `docker-compose.override.yml` and an env file.
+create an env file.
 
-1) Create an env file (gitignored), e.g. `.env.docker`, and put your values there:
+1) Create an env file, e.g. `.env.docker`, and put your values there:
 
 ```env
 JWT_ACCESS_SECRET=your_access_secret_here
