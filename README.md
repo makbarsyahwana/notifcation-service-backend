@@ -40,8 +40,29 @@ Recommended (no secrets committed): create a local `docker-compose.override.yml`
 1) Create an env file (gitignored), e.g. `.env.docker`, and put your values there:
 
 ```env
-JWT_ACCESS_SECRET=replace_me
-JWT_REFRESH_SECRET=replace_me
+JWT_ACCESS_SECRET=your_access_secret_here
+JWT_REFRESH_SECRET=your_refresh_secret_here
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=30d
+
+# Optional: SMTP (for real email sending)
+SMTP_ENABLED=false
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_smtp_username
+SMTP_PASS=your_smtp_password
+MAIL_FROM="Birthday Reminder <no-reply@example.com>"
+
+# Optional: hCaptcha (enable only if you have a secret key)
+HCAPTCHA_ENABLED=false
+HCAPTCHA_SECRET_KEY=your_hcaptcha_secret_key
+HCAPTCHA_REQUIRED_AFTER_OTP_REQUESTS=3
+HCAPTCHA_REQUIRED_AFTER_OTP_FAILS=5
+HCAPTCHA_WINDOW_SECONDS=900
+
+# Optional: worker dev flag
+BIRTHDAY_INCLUDE_UNVERIFIED=false
 ```
 
 2) Create `docker-compose.override.yml`:
