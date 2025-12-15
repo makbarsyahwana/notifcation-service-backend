@@ -36,6 +36,20 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
     const includeUnverifiedRaw = this.configService.get<string>('BIRTHDAY_INCLUDE_UNVERIFIED');
     const includeUnverified = includeUnverifiedRaw === 'true';
 
+    const sendAnytimeRaw = this.configService.get<string>('BIRTHDAY_SEND_ANYTIME');
+    const sendAnytime = sendAnytimeRaw === 'true';
+
+    const sendTimeRaw = this.configService.get<string>('BIRTHDAY_SEND_TIME_LOCAL') ?? '09:00';
+    let sendHour = 9;
+    let sendMinute = 0;
+    if (!sendAnytime) {
+      const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(sendTimeRaw);
+      if (match) {
+        sendHour = Number(match[1]);
+        sendMinute = Number(match[2]);
+      }
+    }
+
     const query = includeUnverified ? {} : { emailVerified: true };
     const users = await this.userModel
       .find(query, { name: 1, email: 1, timezone: 1 })
@@ -48,7 +62,7 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
         const localNow = nowUtc.setZone(user.timezone);
         if (!localNow.isValid) return;
 
-        if (localNow.hour !== 9 || localNow.minute !== 0) return;
+        if (!sendAnytime && (localNow.hour !== sendHour || localNow.minute !== sendMinute)) return;
 
         const today = localNow.toISODate();
         if (!today) return;

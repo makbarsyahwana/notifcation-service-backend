@@ -159,4 +159,86 @@ describe('BirthdayWorkerService', () => {
 
     consoleSpy.mockRestore();
   });
+
+  it('sends at any time when BIRTHDAY_SEND_ANYTIME is enabled', async () => {
+    const userModel = createModelMock();
+    const sender = { send: jest.fn().mockResolvedValue(undefined) };
+    const configService = {
+      get: jest.fn().mockImplementation((key: string) => {
+        if (key === 'BIRTHDAY_SEND_ANYTIME') return 'true';
+        return undefined;
+      }),
+    };
+
+    const users = [
+      {
+        _id: '507f191e810c19729de860ea',
+        name: 'Jane',
+        email: 'jane@example.com',
+        timezone: 'Asia/Jakarta',
+        emailVerified: true,
+        birthdayMd: '12-14',
+        lastBirthdayMessageDate: undefined,
+      },
+    ];
+
+    userModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(users),
+    });
+
+    userModel.findOneAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue({ ...users[0], lastBirthdayMessageDate: '2025-12-14' }),
+    });
+
+    const service = new BirthdayWorkerService(configService as any, userModel as any, sender as any);
+
+    const nowUtc = DateTime.fromISO('2025-12-14T00:00:00.000Z');
+    await service.handleTick(nowUtc);
+
+    expect(sender.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('supports configuring the send time via BIRTHDAY_SEND_TIME_LOCAL', async () => {
+    const userModel = createModelMock();
+    const sender = { send: jest.fn().mockResolvedValue(undefined) };
+    const configService = {
+      get: jest.fn().mockImplementation((key: string) => {
+        if (key === 'BIRTHDAY_SEND_TIME_LOCAL') return '10:30';
+        return undefined;
+      }),
+    };
+
+    const users = [
+      {
+        _id: '507f191e810c19729de860ea',
+        name: 'Jane',
+        email: 'jane@example.com',
+        timezone: 'Asia/Jakarta',
+        emailVerified: true,
+        birthdayMd: '12-14',
+        lastBirthdayMessageDate: undefined,
+      },
+    ];
+
+    userModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(users),
+    });
+
+    userModel.findOneAndUpdate.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue({ ...users[0], lastBirthdayMessageDate: '2025-12-14' }),
+    });
+
+    const service = new BirthdayWorkerService(configService as any, userModel as any, sender as any);
+
+    const nowUtc = DateTime.fromISO('2025-12-14T03:30:00.000Z');
+    await service.handleTick(nowUtc);
+
+    expect(sender.send).toHaveBeenCalledTimes(1);
+  });
 });

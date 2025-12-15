@@ -63,6 +63,12 @@ HCAPTCHA_WINDOW_SECONDS=900
 
 # Optional: worker dev flag
 BIRTHDAY_INCLUDE_UNVERIFIED=false
+
+# Optional: worker timing flags
+# If BIRTHDAY_SEND_ANYTIME=true, the worker will send/log on the first tick of the birthday day (any time).
+# Otherwise it will send/log only at BIRTHDAY_SEND_TIME_LOCAL (default 09:00).
+BIRTHDAY_SEND_ANYTIME=false
+BIRTHDAY_SEND_TIME_LOCAL=09:00
 ```
 
 2) Create `docker-compose.override.yml`:
@@ -247,7 +253,8 @@ curl -X DELETE http://localhost:3000/users/<mongoObjectId>
 
 - The worker runs every minute.
 - For each user it checks the **current local time** in `user.timezone`.
-- If it's **09:00** local time and **today's month/day matches** the user's birthday, it logs:
+- If `BIRTHDAY_SEND_ANYTIME=true`, it will send/log on the first tick when **today's month/day matches** the user's birthday.
+- Otherwise, it will only send/log at `BIRTHDAY_SEND_TIME_LOCAL` (default `09:00`) when **today's month/day matches** the user's birthday.
 
 ```text
 Happy Birthday, <name>! (<email>)
