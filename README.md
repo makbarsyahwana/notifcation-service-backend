@@ -62,7 +62,7 @@ HCAPTCHA_REQUIRED_AFTER_OTP_FAILS=5
 HCAPTCHA_WINDOW_SECONDS=900
 
 # Optional: worker dev flag
-BIRTHDAY_INCLUDE_UNVERIFIED=false, the worker will send/log to each users including unverified one
+BIRTHDAY_INCLUDE_UNVERIFIED=false
 
 # Optional: worker timing flags
 # If BIRTHDAY_SEND_ANYTIME=true, the worker will send/log on the first tick of the birthday day (any time).
