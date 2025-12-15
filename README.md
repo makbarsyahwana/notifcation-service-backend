@@ -118,6 +118,55 @@ APP_ENV=local bun run start:dev
 APP_ENV=local bun run start:worker:dev
 ```
 
+## SMTP email setup (Mailtrap)
+
+This service sends OTP emails and (optionally) birthday emails via SMTP using Nodemailer.
+
+Mailtrap options:
+
+- **Mailtrap Email Testing**: emails are captured in a Mailtrap inbox (no real delivery). Good for development.
+- **Mailtrap Email Sending**: real delivery, but you must use a verified sender/domain.
+
+Demo domain limitation (Mailtrap Email Sending):
+
+- If you see an error like:
+
+```text
+554 5.7.1 Demo domains can only be used to send emails to account owners.
+```
+
+it means you are using a Mailtrap **demo domain**, which can only send to the account owner address.
+To send to any recipient:
+
+- Use **Mailtrap Email Testing** (captures emails), or
+- Set up **Mailtrap Email Sending** with your own verified domain/sender.
+
+SMTP environment variables:
+
+- `SMTP_ENABLED=true`
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`
+- `SMTP_USER`, `SMTP_PASS`
+- `MAIL_FROM`
+
+## hCaptcha setup
+
+hCaptcha is used as an anti-abuse measure for auth endpoints. It is **conditionally required** only after suspicious behavior / repeated attempts.
+
+Backend (this service):
+
+- Uses the **hCaptcha Secret Key** (server-side).
+- Env vars:
+  - `HCAPTCHA_ENABLED=true`
+  - `HCAPTCHA_SECRET_KEY=<your_secret_key>`
+  - `HCAPTCHA_REQUIRED_AFTER_OTP_REQUESTS` (default `3`)
+  - `HCAPTCHA_REQUIRED_AFTER_OTP_FAILS` (default `5`)
+  - `HCAPTCHA_WINDOW_SECONDS` (default `900`)
+
+Frontend (if you build one later):
+
+- Uses the **hCaptcha Site Key** (public) (often named like `NEXT_PUBLIC_HCAPTCHA_SITE_KEY`).
+- Do **not** put the secret key in the frontend.
+
 ## Auth (OTP + JWT)
 
 This service uses passwordless **OTP via email** to log in.
@@ -253,8 +302,20 @@ curl -X DELETE http://localhost:3000/users/<mongoObjectId>
 
 - The worker runs every minute.
 - For each user it checks the **current local time** in `user.timezone`.
-- If `BIRTHDAY_SEND_ANYTIME=true`, it will send/log on the first tick when **today's month/day matches** the user's birthday.
-- Otherwise, it will only send/log at `BIRTHDAY_SEND_TIME_LOCAL` (default `09:00`) when **today's month/day matches** the user's birthday.
+
+Timing controls:
+
+- `BIRTHDAY_SEND_ANYTIME`
+  - If `true`, the worker will send/log on the first tick when **today's month/day matches** the user's birthday (any time).
+  - If `false` (default), the worker will only send/log at `BIRTHDAY_SEND_TIME_LOCAL` in the user's local timezone.
+- `BIRTHDAY_SEND_TIME_LOCAL`
+  - Local send time in **24-hour `HH:mm`** format (example: `09:00`, `10:30`).
+  - Default is `09:00`.
+  - If the value is invalid, it falls back to `09:00`.
+
+Precedence:
+
+- If `BIRTHDAY_SEND_ANYTIME=true`, `BIRTHDAY_SEND_TIME_LOCAL` is ignored.
 
 ```text
 Happy Birthday, <name>! (<email>)
