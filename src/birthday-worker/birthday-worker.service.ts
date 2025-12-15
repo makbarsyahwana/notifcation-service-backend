@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { DateTime } from 'luxon';
 import { Model } from 'mongoose';
@@ -15,6 +16,7 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
   private task?: ScheduledTask;
 
   constructor(
+    private readonly configService: ConfigService,
     @InjectModel(User.name)
     private readonly userModel: Model<UserDocument>,
     @Inject(BIRTHDAY_MESSAGE_SENDER)
@@ -31,9 +33,13 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async handleTick(nowUtc: DateTime = DateTime.utc()): Promise<void> {
+    const includeUnverifiedRaw = this.configService.get<string>('BIRTHDAY_INCLUDE_UNVERIFIED');
+    const includeUnverified = includeUnverifiedRaw === 'true';
+
+    const query = includeUnverified ? {} : { emailVerified: true };
     const users = await this.userModel
-      .find({ emailVerified: true }, { name: 1, email: 1, timezone: 1 })
-      .select('+birthdayMd +lastBirthdayMessageDate')
+      .find(query, { name: 1, email: 1, timezone: 1 })
+      .select('+birthdayMd +lastBirthdayMessageDate +emailVerified')
       .lean()
       .exec();
 
@@ -63,6 +69,11 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
           .exec();
 
         if (!updated) return;
+
+        if (!user.emailVerified) {
+          console.log(`Happy Birthday, ${user.name}! (${user.email})`);
+          return;
+        }
 
         await this.sender.send(updated as unknown as User);
       }),
