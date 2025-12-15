@@ -203,6 +203,12 @@ Email verification:
 
 - Birthday messages are only sent to users with `emailVerified=true`.
 
+Development feature flag:
+
+- Set `BIRTHDAY_INCLUDE_UNVERIFIED=true` to include unverified users in the worker scan.
+- When enabled, unverified users will be **logged to console only** (no SMTP), while verified users keep the normal behavior.
+- Default is `false`.
+
 Email sending (optional):
 
 - If `SMTP_ENABLED=true` and SMTP config is provided, the worker will send an email via SMTP (Nodemailer).
