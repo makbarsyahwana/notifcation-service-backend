@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { MailModule } from '../mail/mail.module';
 import { UsersModule } from '../users/users.module';
+import { BirthdayQueueModule } from '../birthday-worker/birthday-queue.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AttemptTrackerService } from './attempt-tracker.service';
@@ -10,7 +11,7 @@ import { HcaptchaService } from './hcaptcha.service';
 import { JwtStrategy } from './jwt.strategy';
 
 @Module({
-  imports: [UsersModule, MailModule, PassportModule, JwtModule.register({})],
+  imports: [UsersModule, BirthdayQueueModule, MailModule, PassportModule, JwtModule.register({})],
   controllers: [AuthController],
   providers: [AuthService, AttemptTrackerService, HcaptchaService, JwtStrategy],
 })

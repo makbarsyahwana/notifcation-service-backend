@@ -1,15 +1,16 @@
 import { Module } from '@nestjs/common';
-import { BirthdayWorkerService } from './birthday-worker.service';
 import {
   BIRTHDAY_MESSAGE_SENDER,
 } from './birthday-message-sender';
 import { ConsoleBirthdayMessageSender } from './console-birthday-message-sender';
 import { UsersModule } from '../users/users.module';
+import { BirthdayQueueModule } from './birthday-queue.module';
+import { BirthdayJobWorkerService } from './birthday-job-worker.service';
 
 @Module({
-  imports: [UsersModule],
+  imports: [UsersModule, BirthdayQueueModule],
   providers: [
-    BirthdayWorkerService,
+    BirthdayJobWorkerService,
     ConsoleBirthdayMessageSender,
     {
       provide: BIRTHDAY_MESSAGE_SENDER,

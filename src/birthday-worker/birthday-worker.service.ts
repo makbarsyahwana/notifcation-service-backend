@@ -1,9 +1,8 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { DateTime } from 'luxon';
 import { Model } from 'mongoose';
-import cron, { ScheduledTask } from 'node-cron';
 import {
   BIRTHDAY_MESSAGE_SENDER,
 } from './birthday-message-sender';
@@ -11,10 +10,7 @@ import type { BirthdayMessageSender } from './birthday-message-sender';
 import { User, UserDocument } from '../users/schemas/user.schema';
 
 @Injectable()
-export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(BirthdayWorkerService.name);
-  private task?: ScheduledTask;
-
+export class BirthdayWorkerService {
   constructor(
     private readonly configService: ConfigService,
     @InjectModel(User.name)
@@ -22,15 +18,6 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
     @Inject(BIRTHDAY_MESSAGE_SENDER)
     private readonly sender: BirthdayMessageSender,
   ) {}
-
-  onModuleInit() {
-    this.task = cron.schedule('* * * * *', () => this.handleTick());
-    this.logger.log('Birthday worker scheduled');
-  }
-
-  onModuleDestroy() {
-    this.task?.stop();
-  }
 
   async handleTick(nowUtc: DateTime = DateTime.utc()): Promise<void> {
     const includeUnverifiedRaw = this.configService.get<string>('BIRTHDAY_INCLUDE_UNVERIFIED');
@@ -42,7 +29,10 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
     const sendTimeRaw = this.configService.get<string>('BIRTHDAY_SEND_TIME_LOCAL') ?? '09:00';
     let sendHour = 9;
     let sendMinute = 0;
-    if (!sendAnytime) {
+    if (sendAnytime) {
+      sendHour = 0;
+      sendMinute = 0;
+    } else {
       const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(sendTimeRaw);
       if (match) {
         sendHour = Number(match[1]);
@@ -76,7 +66,7 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
         const localNow = nowUtc.setZone(user.timezone);
         if (!localNow.isValid) return;
 
-        if (!sendAnytime && (localNow.hour !== sendHour || localNow.minute !== sendMinute)) return;
+        if (localNow.hour !== sendHour || localNow.minute !== sendMinute) return;
 
         const today = localNow.toISODate();
         if (!today) return;

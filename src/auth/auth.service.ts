@@ -13,6 +13,7 @@ import { Model } from 'mongoose';
 import { MailService } from '../mail/mail.service';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { UsersService } from '../users/users.service';
+import { BirthdayQueueService } from '../birthday-worker/birthday-queue.service';
 import { AttemptTrackerService } from './attempt-tracker.service';
 import { HcaptchaService } from './hcaptcha.service';
 import { SignupDto } from './dto/signup.dto';
@@ -28,6 +29,7 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly attemptTracker: AttemptTrackerService,
     private readonly hcaptchaService: HcaptchaService,
+    private readonly birthdayQueueService: BirthdayQueueService,
     @InjectModel(User.name)
     private readonly userModel: Model<UserDocument>,
   ) {}
@@ -276,6 +278,13 @@ export class AuthService {
         },
       )
       .exec();
+
+    await this.birthdayQueueService.scheduleUser({
+      _id: user._id,
+      birthday: user.birthday,
+      timezone: user.timezone,
+      emailVerified: true,
+    } as any);
 
     const tokens = await this.issueTokens(user._id.toString());
     return tokens;

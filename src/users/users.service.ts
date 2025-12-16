@@ -6,6 +6,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { DateTime } from 'luxon';
 import { Model } from 'mongoose';
+import { BirthdayQueueService } from '../birthday-worker/birthday-queue.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User, UserDocument } from './schemas/user.schema';
@@ -15,6 +16,7 @@ export class UsersService {
   constructor(
     @InjectModel(User.name)
     private readonly userModel: Model<UserDocument>,
+    private readonly birthdayQueueService: BirthdayQueueService,
   ) {}
 
   private toBirthdayMd(birthdayIsoDate: string): string {
@@ -26,10 +28,13 @@ export class UsersService {
 
   async create(dto: CreateUserDto): Promise<User> {
     try {
-      return await this.userModel.create({
+      const created = await this.userModel.create({
         ...dto,
         birthdayMd: this.toBirthdayMd(dto.birthday),
       });
+
+      await this.birthdayQueueService.scheduleUser(created as unknown as any);
+      return created;
     } catch (err: any) {
       if (err?.code === 11000) {
         throw new ConflictException('Email already exists');
@@ -62,9 +67,12 @@ export class UsersService {
           new: true,
           runValidators: true,
         })
+        .select('+emailVerified')
         .exec();
 
       if (!user) throw new NotFoundException('User not found');
+
+      await this.birthdayQueueService.scheduleUser(user as unknown as any);
       return user;
     } catch (err: any) {
       if (err?.code === 11000) {
@@ -77,5 +85,7 @@ export class UsersService {
   async remove(id: string): Promise<void> {
     const res = await this.userModel.findByIdAndDelete(id).exec();
     if (!res) throw new NotFoundException('User not found');
+
+    await this.birthdayQueueService.removeUser(id);
   }
 }

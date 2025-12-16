@@ -195,7 +195,7 @@ describe('BirthdayWorkerService', () => {
 
     const service = new BirthdayWorkerService(configService as any, userModel as any, sender as any);
 
-    const nowUtc = DateTime.fromISO('2025-12-14T00:00:00.000Z');
+    const nowUtc = DateTime.fromISO('2025-12-13T17:00:00.000Z');
     await service.handleTick(nowUtc);
 
     expect(sender.send).toHaveBeenCalledTimes(1);
