@@ -8,17 +8,30 @@ services:
     volumes:
       - mongo_data:/data/db
 
+  redis:
+    image: redis:7-alpine
+    container_name: birthday-reminder-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
   api:
     build:
       context: .
     container_name: birthday-reminder-api
     restart: unless-stopped
     env_file:
-      - .env.docker
+      - .env.docker.example
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "3000:3000"
     depends_on:
       - mongo
+      - redis
 
   worker:
     build:
@@ -26,10 +39,15 @@ services:
     container_name: birthday-reminder-worker
     restart: unless-stopped
     env_file:
-      - .env.docker
+      - .env.docker.example
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     command: ["bun", "dist/worker.js"]
     depends_on:
       - mongo
+      - redis
 
 volumes:
   mongo_data:
+  redis_data:
