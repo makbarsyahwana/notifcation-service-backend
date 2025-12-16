@@ -241,4 +241,35 @@ describe('BirthdayWorkerService', () => {
 
     expect(sender.send).toHaveBeenCalledTimes(1);
   });
+
+  it('queries only users with birthdayMd matching possible today dates and excludes already-sent (optimized)', async () => {
+    const userModel = createModelMock();
+    const sender = { send: jest.fn().mockResolvedValue(undefined) };
+    const configService = { get: jest.fn().mockReturnValue(undefined) };
+
+    userModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    });
+
+    const service = new BirthdayWorkerService(configService as any, userModel as any, sender as any);
+
+    const nowUtc = DateTime.fromISO('2025-12-14T12:00:00.000Z');
+    await service.handleTick(nowUtc);
+
+    // Verify the query includes both filters
+    expect(userModel.find).toHaveBeenCalledTimes(1);
+    const queryArg = userModel.find.mock.calls[0][0];
+
+    // birthdayMd filter with $in
+    expect(queryArg).toHaveProperty('birthdayMd');
+    expect(queryArg.birthdayMd).toHaveProperty('$in');
+    expect(queryArg.birthdayMd.$in).toContain('12-14');
+
+    // lastBirthdayMessageDate filter with $nin (exclude already-sent)
+    expect(queryArg).toHaveProperty('lastBirthdayMessageDate');
+    expect(queryArg.lastBirthdayMessageDate).toHaveProperty('$nin');
+    expect(queryArg.lastBirthdayMessageDate.$nin).toContain('2025-12-14');
+  });
 });

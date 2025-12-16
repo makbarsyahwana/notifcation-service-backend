@@ -50,7 +50,21 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const query = includeUnverified ? {} : { emailVerified: true };
+    // Optimization: At any UTC moment, there are at most 2 calendar dates active
+    // across all timezones (UTC-12 to UTC+14). Query only users whose birthdayMd
+    // matches one of those dates, using the indexed field.
+    const possibleMdDates = this.getPossibleTodayMdDates(nowUtc);
+    const possibleIsoDates = this.getPossibleTodayIsoDates(nowUtc);
+
+    const query: Record<string, unknown> = {
+      birthdayMd: { $in: possibleMdDates },
+      // Exclude users already sent today (in any active timezone)
+      lastBirthdayMessageDate: { $nin: possibleIsoDates },
+    };
+    if (!includeUnverified) {
+      query.emailVerified = true;
+    }
+
     const users = await this.userModel
       .find(query, { name: 1, email: 1, timezone: 1 })
       .select('+birthdayMd +lastBirthdayMessageDate +emailVerified')
@@ -67,6 +81,7 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
         const today = localNow.toISODate();
         if (!today) return;
 
+        // Verify the user's birthday actually matches their local "today"
         const todayMd = localNow.toFormat('MM-dd');
         if (todayMd !== user.birthdayMd) return;
 
@@ -92,5 +107,45 @@ export class BirthdayWorkerService implements OnModuleInit, OnModuleDestroy {
         await this.sender.send(updated as unknown as User);
       }),
     );
+  }
+
+  /**
+   * Returns MM-dd values that could be "today" somewhere (for birthdayMd filter).
+   * At one UTC moment, Asia can already be on "tomorrow" while America is still
+   * on "today", so we check the extreme zones (UTC-12 and UTC+14).
+   */
+  private getPossibleTodayMdDates(nowUtc: DateTime): string[] {
+    const earliest = nowUtc.setZone('Etc/GMT+12'); // UTC-12
+    const latest = nowUtc.setZone('Etc/GMT-14');   // UTC+14
+
+    const dates = new Set<string>();
+    if (earliest.isValid) dates.add(earliest.toFormat('MM-dd'));
+    if (latest.isValid) dates.add(latest.toFormat('MM-dd'));
+    dates.add(nowUtc.toFormat('MM-dd'));
+
+    return [...dates];
+  }
+
+  /**
+   * Returns ISO dates (YYYY-MM-DD) that could be "today" somewhere.
+   * Used to pre-filter users who were already sent a message today.
+   */
+  private getPossibleTodayIsoDates(nowUtc: DateTime): string[] {
+    const earliest = nowUtc.setZone('Etc/GMT+12'); // UTC-12
+    const latest = nowUtc.setZone('Etc/GMT-14');   // UTC+14
+
+    const dates = new Set<string>();
+    if (earliest.isValid) {
+      const iso = earliest.toISODate();
+      if (iso) dates.add(iso);
+    }
+    if (latest.isValid) {
+      const iso = latest.toISODate();
+      if (iso) dates.add(iso);
+    }
+    const utcIso = nowUtc.toISODate();
+    if (utcIso) dates.add(utcIso);
+
+    return [...dates];
   }
 }
