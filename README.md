@@ -1,12 +1,13 @@
 # Birthday Reminder Service (NestJS + Bun)
 
-Backend service that stores users and runs a worker that sends a **"Happy Birthday"** message at **09:00** in each user's local timezone on their birthday.
+Backend service that stores users and runs a worker that sends a **"Happy Birthday"** message at a configured local time (default **09:00**) in each user's local timezone on their birthday.
 
 ## Requirements
 
 - **Runtime**: Bun
 - **Backend**: NestJS
 - **Database**: MongoDB
+- **Queue**: Redis (BullMQ)
 
 ## Running with Docker
 
@@ -22,8 +23,8 @@ docker compose up --build
 
 Environment variables used by containers:
 
-- `APP_ENV` (set to `production` in docker-compose)
-- `MONGODB_URI` (defaults to `mongodb://localhost:27017/birthday_reminder` for local runs)
+- `APP_ENV` (optional; controls which `.env.<env>` file is loaded for non-Docker runs)
+- `MONGODB_URI`
 - `PORT` (API only; defaults to `3000`)
 - `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` (BullMQ)
 
@@ -34,7 +35,7 @@ Required for API auth:
 
 ### Using your own env with Docker Compose
 
-The Docker image does not bundle any `.env*`
+The Docker image does not bundle any `.env*`.
 If you want to use your own env values (JWT/SMTP/hCaptcha/etc.), pass them at runtime via Docker Compose.
 
 The repository includes `.env.docker.example` for convenience.
@@ -87,6 +88,12 @@ services:
 
 ```
 
+3) Run:
+
+```bash
+docker compose up --build
+```
+
 ## BullMQ worker throughput
 
 The birthday worker uses BullMQ to process scheduled birthday jobs. You can tune parallelism and throughput with:
@@ -97,40 +104,28 @@ The birthday worker uses BullMQ to process scheduled birthday jobs. You can tune
 
 If you use Mailtrap or any SMTP provider with strict limits, consider setting `BIRTHDAY_WORKER_RATE_MAX` to a small value (e.g. `1` to `5`).
 
-## Performance & complexity (cron vs BullMQ)
+## Cron vs BullMQ tradeoffs
 
-Let:
+| Aspect | Cron polling (every minute) | BullMQ scheduled jobs |
+| --- | --- | --- |
+| Work pattern | Time-driven (always runs) | Event-driven (runs only when due) |
+| DB load | ~1440 checks/day, even if nothing is due | Mostly proportional to actual birthdays due |
+| Cost profile | Often cheaper upfront (no Redis), but ongoing DB reads 24/7 | Adds Redis cost (~`O(N)` jobs in memory), but reduces DB work |
+| Infra | No Redis | Requires Redis (stores ~`O(N)` scheduled jobs) |
+| Spikes | Small steady load + send-time spikes | Can spike at local send time per timezone (tune with concurrency/limiter) |
 
-- `N` = total users
-- `B` = users whose birthday is today (average `B ≈ N/365`)
+Ballpark cost (USD/month, very rough):
 
-Cron polling (every minute):
-
-- Runs `1440` times/day.
-- Mongo work/day is roughly `1440 * O(log N + B)` (indexed query + processing results).
-- Plain English: every minute you pay an indexed lookup cost (`log N`) to find today's birthday users, plus you still have to process the matches (`B` users). Doing that 1440 times/day repeats the same work many times.
-
-BullMQ scheduling:
-
-- Processes only due jobs: work/day is roughly `O(B)` (plus `O(log N)` queue ops on user create/update/delete).
-- Avoids the `~1440x` “read amplification” from polling.
-
-Cost perspective (high level):
-
-- Cron polling often looks cheaper upfront (no Redis), but it creates steady database read load 24/7.
-- BullMQ adds Redis cost (roughly `O(N)` scheduled jobs in memory) but reduces database work and makes costs scale more with real sends/updates.
+- Cron polling: typically `$0` extra infra (no Redis), but can increase DB/CPU/network spend due to constant polling.
+- BullMQ: adds Redis. Typical managed Redis ranges (depends on provider/region/HA):
+  - ~`10k` users: `$0–$10/mo`
+  - ~`100k` users: `$10–$30/mo`
+  - ~`1M` users: `$30–$120/mo`
 
 Decision framing:
 
-- If your main goal is cost-minimization at `<=1M` users, and you don’t otherwise need Redis, cron polling can be cheaper.
-- If your goal is production-grade scheduling, predictable behavior, and future extensibility (more queues/jobs), BullMQ is the better architecture—even if Redis adds some cost.
-- If you already use Redis for caching/sessions/other queues, BullMQ becomes close to cost-neutral while still delivering the performance and operational wins.
-
-3) Run:
-
-```bash
-docker compose up --build
-```
+- Choose cron if you want the simplest/cheapest setup and you don’t need Redis.
+- Choose BullMQ if you want production-grade scheduling and predictable scaling (often cost-neutral if Redis already exists).
 
 ## Environment management (local/dev/staging/production)
 
@@ -269,6 +264,8 @@ For staging/production, set `MONGODB_URI` to a credentialed MongoDB connection s
 ```bash
 bun install
 
+# Make sure MongoDB and Redis are running and env vars are set (MONGODB_URI, REDIS_HOST/REDIS_PORT).
+
 # API (watch)
 bun run start:dev
 
@@ -346,13 +343,7 @@ curl -X DELETE http://localhost:3000/users/<mongoObjectId>
 - The worker uses **BullMQ** (Redis) to schedule one delayed job per user.
 - On startup, it does a one-time scan to (re)schedule jobs for existing users.
 
-Throughput controls:
-
-- `BIRTHDAY_WORKER_CONCURRENCY` (default: `25`): how many jobs are processed in parallel.
-- `BIRTHDAY_WORKER_RATE_MAX` (optional): max jobs per rate window. If unset/empty, no rate limit is applied.
-- `BIRTHDAY_WORKER_RATE_DURATION_MS` (default: `1000`): rate window size in milliseconds.
-
-Note: Mailtrap may need throttling. Consider setting `BIRTHDAY_WORKER_RATE_MAX` to a small value (e.g. `1` to `5`).
+Throughput controls are documented above in `BullMQ worker throughput`.
 
 Timing controls:
 
