@@ -10,7 +10,7 @@ Backend service that stores users and runs a worker that sends a **"Happy Birthd
 
 ## Running with Docker
 
-Start MongoDB + API + worker:
+Start MongoDB + Redis + API + worker:
 
 ```bash
 docker compose up --build
@@ -18,12 +18,14 @@ docker compose up --build
 
 - API: `http://localhost:3000`
 - MongoDB: `mongodb://localhost:27017`
+- Redis: `redis://localhost:6379`
 
 Environment variables used by containers:
 
 - `APP_ENV` (set to `production` in docker-compose)
 - `MONGODB_URI` (defaults to `mongodb://localhost:27017/birthday_reminder` for local runs)
 - `PORT` (API only; defaults to `3000`)
+- `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` (BullMQ)
 
 Required for API auth:
 
@@ -35,7 +37,8 @@ Required for API auth:
 The Docker image does not bundle any `.env*`
 If you want to use your own env values (JWT/SMTP/hCaptcha/etc.), pass them at runtime via Docker Compose.
 
-create an env file.
+The repository includes `.env.docker.example` for convenience.
+If you want your own secrets, copy it to `.env.docker` and use an override file.
 
 1) Create an env file, e.g. `.env.docker`, and put your values there:
 
@@ -65,7 +68,7 @@ HCAPTCHA_WINDOW_SECONDS=900
 BIRTHDAY_INCLUDE_UNVERIFIED=false
 
 # Optional: worker timing flags
-# If BIRTHDAY_SEND_ANYTIME=true, the worker will send/log on the first tick of the birthday day (any time).
+# If BIRTHDAY_SEND_ANYTIME=true, the worker will send/log at 00:00 local time.
 # Otherwise it will send/log only at BIRTHDAY_SEND_TIME_LOCAL (default 09:00).
 BIRTHDAY_SEND_ANYTIME=false
 BIRTHDAY_SEND_TIME_LOCAL=09:00
@@ -81,7 +84,47 @@ services:
   worker:
     env_file:
       - .env.docker
+
 ```
+
+## BullMQ worker throughput
+
+The birthday worker uses BullMQ to process scheduled birthday jobs. You can tune parallelism and throughput with:
+
+- `BIRTHDAY_WORKER_CONCURRENCY` (default: `25`): how many jobs are processed in parallel.
+- `BIRTHDAY_WORKER_RATE_MAX` (optional): max jobs per rate window. If unset/empty, no rate limit is applied.
+- `BIRTHDAY_WORKER_RATE_DURATION_MS` (default: `1000`): rate window size in milliseconds.
+
+If you use Mailtrap or any SMTP provider with strict limits, consider setting `BIRTHDAY_WORKER_RATE_MAX` to a small value (e.g. `1` to `5`).
+
+## Performance & complexity (cron vs BullMQ)
+
+Let:
+
+- `N` = total users
+- `B` = users whose birthday is today (average `B ≈ N/365`)
+
+Cron polling (every minute):
+
+- Runs `1440` times/day.
+- Mongo work/day is roughly `1440 * O(log N + B)` (indexed query + processing results).
+- Plain English: every minute you pay an indexed lookup cost (`log N`) to find today's birthday users, plus you still have to process the matches (`B` users). Doing that 1440 times/day repeats the same work many times.
+
+BullMQ scheduling:
+
+- Processes only due jobs: work/day is roughly `O(B)` (plus `O(log N)` queue ops on user create/update/delete).
+- Avoids the `~1440x` “read amplification” from polling.
+
+Cost perspective (high level):
+
+- Cron polling often looks cheaper upfront (no Redis), but it creates steady database read load 24/7.
+- BullMQ adds Redis cost (roughly `O(N)` scheduled jobs in memory) but reduces database work and makes costs scale more with real sends/updates.
+
+Decision framing:
+
+- If your main goal is cost-minimization at `<=1M` users, and you don’t otherwise need Redis, cron polling can be cheaper.
+- If your goal is production-grade scheduling, predictable behavior, and future extensibility (more queues/jobs), BullMQ is the better architecture—even if Redis adds some cost.
+- If you already use Redis for caching/sessions/other queues, BullMQ becomes close to cost-neutral while still delivering the performance and operational wins.
 
 3) Run:
 
@@ -300,15 +343,23 @@ curl -X DELETE http://localhost:3000/users/<mongoObjectId>
 
 ## Worker behavior
 
-- The worker runs every minute.
-- For each user it checks the **current local time** in `user.timezone`.
+- The worker uses **BullMQ** (Redis) to schedule one delayed job per user.
+- On startup, it does a one-time scan to (re)schedule jobs for existing users.
+
+Throughput controls:
+
+- `BIRTHDAY_WORKER_CONCURRENCY` (default: `25`): how many jobs are processed in parallel.
+- `BIRTHDAY_WORKER_RATE_MAX` (optional): max jobs per rate window. If unset/empty, no rate limit is applied.
+- `BIRTHDAY_WORKER_RATE_DURATION_MS` (default: `1000`): rate window size in milliseconds.
+
+Note: Mailtrap may need throttling. Consider setting `BIRTHDAY_WORKER_RATE_MAX` to a small value (e.g. `1` to `5`).
 
 Timing controls:
 
-- `BIRTHDAY_SEND_ANYTIME`
-  - If `true`, the worker will send/log on the first tick when **today's month/day matches** the user's birthday (any time).
+- `BIRTHDAY_SEND_ANYTIME`:
+  - If `true`, the worker will send/log at `00:00` in the user's local timezone.
   - If `false` (default), the worker will only send/log at `BIRTHDAY_SEND_TIME_LOCAL` in the user's local timezone.
-- `BIRTHDAY_SEND_TIME_LOCAL`
+- `BIRTHDAY_SEND_TIME_LOCAL`:
   - Local send time in **24-hour `HH:mm`** format (example: `09:00`, `10:30`).
   - Default is `09:00`.
   - If the value is invalid, it falls back to `09:00`.
