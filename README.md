@@ -9,6 +9,29 @@ Backend service that stores users and runs a worker that sends a **"Happy Birthd
 - **Database**: MongoDB
 - **Queue**: Redis (BullMQ)
 
+## Cron vs Message Broker/Queue(BullMQ) tradeoffs
+
+| Aspect | Cron polling (every minute) | BullMQ scheduled jobs |
+| --- | --- | --- |
+| Work pattern | Time-driven (always runs) | Event-driven (runs only when due) |
+| DB load | ~1440 checks/day, even if nothing is due | Mostly proportional to actual birthdays due |
+| Cost profile | Often cheaper upfront (no Redis), but ongoing DB reads 24/7 | Adds Redis cost (~`O(N)` jobs in memory), but reduces DB work |
+| Infra | No Redis | Requires Redis (stores ~`O(N)` scheduled jobs) |
+| Spikes | Small steady load + send-time spikes | Can spike at local send time per timezone (tune with concurrency/limiter) |
+
+Ballpark cost (USD/month, very rough):
+
+- Cron polling: typically `$0` extra infra (no Redis), but can increase DB/CPU/network spend due to constant polling.
+- BullMQ: adds Redis. Typical managed Redis ranges (depends on provider/region/HA):
+  - ~`10k` users: `$0–$10/mo`
+  - ~`100k` users: `$10–$30/mo`
+  - ~`1M` users: `$30–$120/mo`
+
+Decision framing:
+
+- Choose cron if you want the simplest/cheapest setup and you don’t need Redis.
+- Choose BullMQ if you want production-grade scheduling and predictable scaling (often cost-neutral if Redis already exists).
+
 ## Running with Docker
 
 Start MongoDB + Redis + API + worker:
@@ -103,29 +126,6 @@ The birthday worker uses BullMQ to process scheduled birthday jobs. You can tune
 - `BIRTHDAY_WORKER_RATE_DURATION_MS` (default: `1000`): rate window size in milliseconds.
 
 If you use Mailtrap or any SMTP provider with strict limits, consider setting `BIRTHDAY_WORKER_RATE_MAX` to a small value (e.g. `1` to `5`).
-
-## Cron vs Message Broker/Queue(BullMQ) tradeoffs
-
-| Aspect | Cron polling (every minute) | BullMQ scheduled jobs |
-| --- | --- | --- |
-| Work pattern | Time-driven (always runs) | Event-driven (runs only when due) |
-| DB load | ~1440 checks/day, even if nothing is due | Mostly proportional to actual birthdays due |
-| Cost profile | Often cheaper upfront (no Redis), but ongoing DB reads 24/7 | Adds Redis cost (~`O(N)` jobs in memory), but reduces DB work |
-| Infra | No Redis | Requires Redis (stores ~`O(N)` scheduled jobs) |
-| Spikes | Small steady load + send-time spikes | Can spike at local send time per timezone (tune with concurrency/limiter) |
-
-Ballpark cost (USD/month, very rough):
-
-- Cron polling: typically `$0` extra infra (no Redis), but can increase DB/CPU/network spend due to constant polling.
-- BullMQ: adds Redis. Typical managed Redis ranges (depends on provider/region/HA):
-  - ~`10k` users: `$0–$10/mo`
-  - ~`100k` users: `$10–$30/mo`
-  - ~`1M` users: `$30–$120/mo`
-
-Decision framing:
-
-- Choose cron if you want the simplest/cheapest setup and you don’t need Redis.
-- Choose BullMQ if you want production-grade scheduling and predictable scaling (often cost-neutral if Redis already exists).
 
 ## Environment management (local/dev/staging/production)
 
