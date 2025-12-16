@@ -104,7 +104,7 @@ The birthday worker uses BullMQ to process scheduled birthday jobs. You can tune
 
 If you use Mailtrap or any SMTP provider with strict limits, consider setting `BIRTHDAY_WORKER_RATE_MAX` to a small value (e.g. `1` to `5`).
 
-## Cron vs BullMQ tradeoffs
+## Cron vs Message Broker/Queue(BullMQ) tradeoffs
 
 | Aspect | Cron polling (every minute) | BullMQ scheduled jobs |
 | --- | --- | --- |
